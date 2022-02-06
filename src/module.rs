@@ -26,20 +26,20 @@ pub trait ZygiskModule {
     /// If you need to run some operations as superuser, you can call `ZygiskApi::connect_companion()`
     /// to get a socket to do IPC calls with a root companion process.
     /// See [ZygiskApi::connect_companion] for more info.
-    fn pre_app_specialize(&self, api: ZygiskApi, args: &mut AppSpecializeArgs) {}
+    fn pre_app_specialize(&self, api: ZygiskApi, env: JNIEnv, args: &mut AppSpecializeArgs) {}
 
     /// This function is called after the app process is specialized.
     /// At this point, the process has all sandbox restrictions enabled for this application.
     /// This means that this function runs as the same privilege of the app's own code.
-    fn post_app_specialize(&self, api: ZygiskApi, args: &AppSpecializeArgs) {}
+    fn post_app_specialize(&self, api: ZygiskApi, env: JNIEnv, args: &AppSpecializeArgs) {}
 
     /// This function is called before the system server process is specialized.
     /// See [Self::pre_app_specialize] for more info.
-    fn pre_server_specialize(&self, api: ZygiskApi, args: &mut ServerSpecializeArgs) {}
+    fn pre_server_specialize(&self, api: ZygiskApi, env: JNIEnv, args: &mut ServerSpecializeArgs) {}
 
     /// This function is called after the system server process is specialized.
     /// At this point, the process runs with the privilege of `system_server`.
-    fn post_server_specialize(&self, api: ZygiskApi, args: &ServerSpecializeArgs) {}
+    fn post_server_specialize(&self, api: ZygiskApi, env: JNIEnv, args: &ServerSpecializeArgs) {}
 }
 
 /// Information about a registered module, for use in FFI functions.
@@ -49,6 +49,7 @@ pub trait ZygiskModule {
 pub(crate) struct RawModule {
     pub inner: &'static dyn ZygiskModule,
     pub api_table: *const RawApiTable,
+    pub jni_env: *mut jni::sys::JNIEnv,
 }
 
 impl crate::binding::ModuleAbi {
@@ -57,7 +58,8 @@ impl crate::binding::ModuleAbi {
             ($name: ident, $arg_type: ty) => {
                 extern "C" fn $name(module: &mut RawModule, args: $arg_type) {
                     let api = unsafe { ZygiskApi::from_raw(&*module.api_table) };
-                    module.inner.$name(api, args);
+                    let env = unsafe { JNIEnv::from_raw(module.jni_env) }.unwrap();
+                    module.inner.$name(api, env, args);
                 }
             };
         }
