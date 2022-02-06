@@ -1,3 +1,11 @@
+use std::ffi::CStr;
+
+use jni::{
+    strings::JNIStr,
+    sys::{jint, JNINativeMethod},
+    JNIEnv,
+};
+
 use crate::binding::{RawApiTable, StateFlags, ZygiskOption};
 
 /// A handle to API functions provided by the Zygisk runtime. Use this to call utility functions
@@ -73,6 +81,86 @@ impl<'a> ZygiskApi<'a> {
             .map(|raw| StateFlags::from_bits(raw).expect("unsupported flag returned by Magisk"))
             .unwrap_or(StateFlags::empty())
     }
+
+    /// Hook JNI native methods for a Java class.
+    ///
+    /// This looks up all registered JNI native methods and replaces them with your own functions.
+    /// The original function pointer will be saved in each `JNINativeMethod`'s `fnPtr` (thus the
+    /// `&mut` requirement in the function signature).
+    ///
+    /// If no matching class, method name, or signature is found, that specific `JNINativeMethod.fnPtr`
+    /// will be set to [std::ptr::null_mut()].
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe, since a badly designed hook or misuse of raw pointers may lead to
+    /// memory unsafety.
+    pub unsafe fn hook_jni_native_methods(
+        &self,
+        env: JNIEnv,
+        class_name: &JNIStr,
+        methods: &mut [JNINativeMethod],
+    ) {
+        if let Some(func) = self.inner.hook_jni_native_methods {
+            func(
+                env.get_native_interface(),
+                class_name.as_ptr(),
+                methods.as_mut_ptr(),
+                methods.len() as jint,
+            );
+        }
+    }
+
+    /// For ELFs loaded in memory matching `regex`, replace function `symbol` with `new_func`.
+    ///
+    /// The type `*mut ()` is used in place of Rust function pointer types.
+    ///
+    /// If `old_func` is not `None`, the original function pointer will be saved to `old_func`.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe, since a badly designed hook or misuse of raw pointers may lead to
+    /// memory unsafety.
+    pub unsafe fn plt_hook_register(
+        &self,
+        regex: &CStr,
+        symbol: &CStr,
+        new_func: *mut (),
+        old_func: Option<&mut *mut ()>,
+    ) {
+        if let Some(func) = self.inner.plt_hook_register {
+            func(
+                regex.as_ptr(),
+                symbol.as_ptr(),
+                new_func,
+                old_func
+                    .map(|r| r as *mut *mut ())
+                    .unwrap_or(std::ptr::null_mut()),
+            );
+        }
+    }
+
+    /// For ELFs loaded in memory matching `regex`, exclude hooks registered for `symbol`.
+    ///
+    /// If `symbol` is `None`, then all symbols will be excluded.
+    pub fn plt_hook_exclude(&self, regex: &CStr, symbol: Option<&CStr>) {
+        if let Some(func) = self.inner.plt_hook_exclude {
+            func(
+                regex.as_ptr(),
+                symbol.map(CStr::as_ptr).unwrap_or(std::ptr::null()),
+            );
+        }
+    }
+
+    /// Commit all the hooks that was previously registered.
+    ///
+    /// Returns `false` if any error occurs.
+    pub fn plt_hook_commit(&self) -> bool {
+        self.inner
+            .plt_hook_commit
+            .map(|func| func())
+            .unwrap_or(false)
+    }
 }
 
 impl<'a> ZygiskApi<'a> {
@@ -82,6 +170,8 @@ impl<'a> ZygiskApi<'a> {
 
     /// Retain the API handle to be used across function calls to [ZygiskModule](crate::ZygiskModule)
     /// by giving it a `'static` lifetime.
+    ///
+    /// ## Safety
     ///
     /// This is an unsafe function, since the API functions will be unloaded after `post[XXX]Specialize`,
     /// and calling any of the API functions after that point will result in undefined behavior.
