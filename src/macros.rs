@@ -28,6 +28,17 @@ pub fn module_entry_impl(module: &'static dyn ZygiskModule, table: *const (), en
     }
 }
 
+/// Register a static variable as a Zygisk module.
+/// 
+/// ## Example
+/// 
+/// ```
+/// struct DummyModule;
+/// impl ZygiskModule for DummyModule {}
+///
+/// static MODULE: DummyModule = DummyModule;
+/// zygisk_module!(&MODULE);
+/// ```
 #[macro_export]
 macro_rules! zygisk_module {
     ($module: expr) => {
@@ -43,6 +54,14 @@ macro_rules! zygisk_module {
     };
 }
 
+/// Register a root companion request handler function for your module.
+///
+/// The function runs in a superuser daemon process and handles a root companion request from
+/// your module running in a target process. The function has to accept an integer value,
+/// which is a socket that is connected to the target process.
+/// See [ZygiskApi::connect_companion()] for more info.
+///
+/// Note: the function may be run concurrently on multiple threads.
 #[macro_export]
 macro_rules! zygisk_companion {
     ($func:path) => {

@@ -71,6 +71,8 @@ pub struct ServerSpecializeArgs<'a> {
     pub effective_capabilities: &'a mut jlong,
 }
 
+/// Zygisk module options, used in [ZygiskApi::set_option()](crate::ZygiskApi::set_option).
+
 // Note: the original definition is `enum Option : int`. This is a best-effort approach.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,11 +94,12 @@ pub enum ZygiskOption {
 }
 
 bitflags::bitflags! {
+    /// Bit masks of the return value of [ZygiskApi::get_flags()](crate::ZygiskApi::get_flags).
     pub struct StateFlags: u32 {
-        /// The user has granted root access to the current process
+        /// The user has granted root access to the current process.
         const PROCESS_GRANTED_ROOT = (1 << 0);
 
-        /// The current process was added on the denylist
+        /// The current process was added on the denylist.
         const PROCESS_ON_DENYLIST = (1 << 1);
     }
 }
