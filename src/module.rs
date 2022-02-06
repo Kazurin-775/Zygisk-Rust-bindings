@@ -1,6 +1,9 @@
 use jni::JNIEnv;
 
-use crate::{binding::ModuleAbi, AppSpecializeArgs, ServerSpecializeArgs, ZygiskApi};
+use crate::{
+    binding::{ModuleAbi, RawApiTable},
+    AppSpecializeArgs, ServerSpecializeArgs, ZygiskApi,
+};
 
 // Note: in stub implementations, all the arguments are unused.
 #[allow(unused_variables)]
@@ -23,28 +26,38 @@ pub trait ZygiskModule {
     /// If you need to run some operations as superuser, you can call `ZygiskApi::connect_companion()`
     /// to get a socket to do IPC calls with a root companion process.
     /// See [ZygiskApi::connect_companion] for more info.
-    fn pre_app_specialize(&self, args: &mut AppSpecializeArgs) {}
+    fn pre_app_specialize(&self, api: ZygiskApi, args: &mut AppSpecializeArgs) {}
 
     /// This function is called after the app process is specialized.
     /// At this point, the process has all sandbox restrictions enabled for this application.
     /// This means that this function runs as the same privilege of the app's own code.
-    fn post_app_specialize(&self, args: &AppSpecializeArgs) {}
+    fn post_app_specialize(&self, api: ZygiskApi, args: &AppSpecializeArgs) {}
 
     /// This function is called before the system server process is specialized.
     /// See [Self::pre_app_specialize] for more info.
-    fn pre_server_specialize(&self, args: &mut ServerSpecializeArgs) {}
+    fn pre_server_specialize(&self, api: ZygiskApi, args: &mut ServerSpecializeArgs) {}
 
     /// This function is called after the system server process is specialized.
     /// At this point, the process runs with the privilege of `system_server`.
-    fn post_server_specialize(&self, args: &ServerSpecializeArgs) {}
+    fn post_server_specialize(&self, api: ZygiskApi, args: &ServerSpecializeArgs) {}
+}
+
+/// Information about a registered module, for use in FFI functions.
+///
+/// This exists since the Zygisk API binding requires any `this` pointers to be thin,
+/// while Rust's `dyn` pointers are not.
+pub(crate) struct RawModule {
+    pub inner: &'static dyn ZygiskModule,
+    pub api_table: *const RawApiTable,
 }
 
 impl crate::binding::ModuleAbi {
-    pub(crate) fn from_module(module: &'static mut &'static dyn ZygiskModule) -> ModuleAbi {
+    pub(crate) fn from_module(module: &'static mut RawModule) -> ModuleAbi {
         macro_rules! def_func {
             ($name: ident, $arg_type: ty) => {
-                extern "C" fn $name(module: &mut &dyn ZygiskModule, args: $arg_type) {
-                    module.$name(args);
+                extern "C" fn $name(module: &mut RawModule, args: $arg_type) {
+                    let api = unsafe { ZygiskApi::from_raw(&*module.api_table) };
+                    module.inner.$name(api, args);
                 }
             };
         }

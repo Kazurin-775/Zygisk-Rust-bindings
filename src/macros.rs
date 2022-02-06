@@ -2,6 +2,7 @@ pub use jni::JNIEnv;
 
 use crate::{
     binding::{ModuleAbi, RawApiTable},
+    module::RawModule,
     ZygiskApi, ZygiskModule,
 };
 
@@ -16,9 +17,11 @@ pub fn module_entry_impl(module: &'static dyn ZygiskModule, table: *const (), en
     // for the module, and the other for the `ModuleAbi`.)
     // Note that the original version also leaks memory, but it saves one leak
     // compared to us, thanks to C++ not using fat pointers. Lucky them :(
-    let module_abi = Box::leak(Box::new(ModuleAbi::from_module(Box::leak(Box::new(
-        module,
-    )))));
+    let raw_module = Box::leak(Box::new(RawModule {
+        inner: module,
+        api_table: table,
+    }));
+    let module_abi = Box::leak(Box::new(ModuleAbi::from_module(raw_module)));
     if table.register_module.unwrap()(table, module_abi) {
         let api = ZygiskApi::from_raw(table);
         module.on_load(api, env);

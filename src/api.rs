@@ -1,10 +1,23 @@
 use crate::binding::{RawApiTable, StateFlags, ZygiskOption};
 
-pub struct ZygiskApi {
-    inner: &'static RawApiTable,
+/// A handle to API functions provided by the Zygisk runtime. Use this to call utility functions
+/// or to interface with Zygisk.
+///
+/// ## Safety
+///
+/// All API functions will stop working after `post[XXX]Specialize` as Zygisk will be unloaded
+/// from the specialized process afterwards. Therefore, it is required that you stop using any
+/// instances of this object after that point.
+///
+/// In order to prevent the handle from unexpected use, the handle has a lifetime parameter `'a`
+/// that defaults to the lifetime of each function call in [ZygiskModule](crate::ZygiskModule).
+/// To retain this handle across function calls in some rare cases, call the unsafe function
+/// [Self::retain()].
+pub struct ZygiskApi<'a> {
+    inner: &'a RawApiTable,
 }
 
-impl ZygiskApi {
+impl<'a> ZygiskApi<'a> {
     /// Connect to a root companion process and get a Unix domain socket for IPC.
     ///
     /// This API only works in the `pre[XXX]Specialize` functions due to SELinux restrictions.
@@ -62,8 +75,22 @@ impl ZygiskApi {
     }
 }
 
-impl ZygiskApi {
-    pub(crate) fn from_raw(inner: &'static RawApiTable) -> ZygiskApi {
+impl<'a> ZygiskApi<'a> {
+    pub(crate) fn from_raw(inner: &'a RawApiTable) -> ZygiskApi {
         ZygiskApi { inner }
+    }
+
+    /// Retain the API handle to be used across function calls to [ZygiskModule](crate::ZygiskModule)
+    /// by giving it a `'static` lifetime.
+    ///
+    /// This is an unsafe function, since the API functions will be unloaded after `post[XXX]Specialize`,
+    /// and calling any of the API functions after that point will result in undefined behavior.
+    /// This function merely exists for working around Rust's limitations.
+    ///
+    /// This function should rarely be necessary, since an API handle will be passed to
+    /// every function in [ZygiskModule](crate::ZygiskModule) as an argument.
+    pub unsafe fn retain(self) -> ZygiskApi<'static> {
+        // We only need to extend the lifetime, so a simple transmute is sufficient for this case.
+        std::mem::transmute(self)
     }
 }

@@ -4,12 +4,12 @@ use jni::{objects::JString, sys::*};
 
 #[allow(non_camel_case_types)]
 type c_bool = bool;
-type Module = &'static dyn crate::ZygiskModule;
+type Module = crate::module::RawModule;
 
 pub const API_VERSION: c_long = 2;
 
 #[repr(C)]
-pub struct ModuleAbi {
+pub(crate) struct ModuleAbi {
     pub api_version: c_long,
     pub this: &'static mut Module,
     pub pre_app_specialize: extern "C" fn(&mut Module, &mut AppSpecializeArgs),
@@ -19,7 +19,7 @@ pub struct ModuleAbi {
 }
 
 #[repr(C)]
-pub struct RawApiTable {
+pub(crate) struct RawApiTable {
     // These first 2 entries are permanent, shall never change across API versions
     pub this: *const (),
     pub register_module: Option<extern "C" fn(*const RawApiTable, *mut ModuleAbi) -> c_bool>,
