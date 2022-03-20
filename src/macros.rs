@@ -66,12 +66,21 @@ macro_rules! zygisk_module {
 /// Note: the function may be run concurrently on multiple threads.
 #[macro_export]
 macro_rules! zygisk_companion {
-    ($func:path) => {
+    ($func: path) => {
         #[no_mangle]
-        extern "C" fn zygisk_companion_entry(client: ::std::os::unix::io::RawFd) {
-            // Type check
-            let _type_check: fn(::std::os::unix::io::RawFd) = $func;
-            $func(client);
+        extern "C" fn zygisk_companion_entry(socket_fd: ::std::os::unix::io::RawFd) {
+            use ::std::os::unix::io::FromRawFd;
+
+            // SAFETY: it is guaranteed by zygiskd that the argument is a valid
+            // socket fd.
+            let stream = unsafe { ::std::os::unix::net::UnixStream::from_raw_fd(socket_fd) };
+
+            // Call the actual function.
+            let _type_check: fn(::std::os::unix::net::UnixStream) = $func;
+            $func(stream);
+
+            // It is both OK for us to close the fd or not to, since zygiskd
+            // makes use of some nasty `fstat` tricks to handle both situations.
         }
     };
 }
