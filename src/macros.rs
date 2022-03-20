@@ -35,6 +35,8 @@ pub fn module_entry_impl(module: &'static dyn ZygiskModule, table: *const (), en
 /// ## Example
 ///
 /// ```
+/// use zygisk::{zygisk_module, ZygiskModule};
+///
 /// struct DummyModule;
 /// impl ZygiskModule for DummyModule {}
 ///
@@ -64,6 +66,17 @@ macro_rules! zygisk_module {
 /// See [ZygiskApi::connect_companion()] for more info.
 ///
 /// Note: the function may be run concurrently on multiple threads.
+///
+/// ## Example
+///
+/// ```
+/// use std::os::unix::net::UnixStream;
+/// use zygisk::zygisk_companion;
+///
+/// fn companion_main(_socket: UnixStream) {}
+///
+/// zygisk_companion!(companion_main);
+/// ```
 #[macro_export]
 macro_rules! zygisk_companion {
     ($func: path) => {

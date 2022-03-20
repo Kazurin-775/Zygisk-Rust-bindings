@@ -9,15 +9,3 @@ pub use api::ZygiskApi;
 pub use binding::{AppSpecializeArgs, ServerSpecializeArgs, StateFlags, ZygiskOption, API_VERSION};
 pub use error::ZygiskError;
 pub use module::ZygiskModule;
-
-mod test {
-    use std::os::unix::net::UnixStream;
-
-    struct DummyModule;
-    impl crate::ZygiskModule for DummyModule {}
-    static MODULE: DummyModule = DummyModule;
-    crate::zygisk_module!(&MODULE);
-
-    fn companion(_socket: UnixStream) {}
-    crate::zygisk_companion!(companion);
-}
