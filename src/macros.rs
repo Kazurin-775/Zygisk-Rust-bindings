@@ -77,7 +77,10 @@ macro_rules! zygisk_companion {
 
             // Call the actual function.
             let _type_check: fn(::std::os::unix::net::UnixStream) = $func;
-            $func(stream);
+            if let Err(_) = std::panic::catch_unwind(|| $func(stream)) {
+                // Panic messages should be displayed by the default panic hook.
+                std::process::abort();
+            }
 
             // It is both OK for us to close the fd or not to, since zygiskd
             // makes use of some nasty `fstat` tricks to handle both situations.
