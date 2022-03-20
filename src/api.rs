@@ -1,4 +1,10 @@
-use std::ffi::CStr;
+use std::{
+    ffi::CStr,
+    os::unix::{
+        net::UnixStream,
+        prelude::{FromRawFd, RawFd},
+    },
+};
 
 use jni::{
     strings::JNIStr,
@@ -39,13 +45,20 @@ impl<'a> ZygiskApi<'a> {
     /// The root companion process is ABI aware; that is, when calling this function from a 32-bit
     /// process, you will be connected to a 32-bit companion process, and vice versa for 64-bit.
     ///
-    /// Returns a file descriptor to a socket that is connected to the socket passed to your
-    /// module's companion request handler. Returns -1 if the connection attempt failed.
-    pub fn connect_companion(&self) -> i32 {
-        self.inner
+    /// Returns a [UnixStream] that is connected to the socket passed to your module's companion
+    /// request handler. Returns `Err` if the connection attempt failed.
+    pub fn connect_companion(&self) -> Result<UnixStream, crate::ZygiskError> {
+        let fd = self
+            .inner
             .connect_companion
             .map(|func| func(self.inner.this))
-            .unwrap_or(-1)
+            .unwrap_or(-1);
+
+        if fd >= 0 {
+            Ok(unsafe { UnixStream::from_raw_fd(fd) })
+        } else {
+            Err(crate::ZygiskError)
+        }
     }
 
     /// Get the file descriptor of the root folder of the current module.
@@ -56,7 +69,7 @@ impl<'a> ZygiskApi<'a> {
     /// Both restrictions are due to SELinux and UID.
     ///
     /// Returns -1 if errors occurred.
-    pub fn get_module_dir(&self) -> i32 {
+    pub fn get_module_dir(&self) -> RawFd {
         self.inner
             .get_module_dir
             .map(|func| func(self.inner.this))
